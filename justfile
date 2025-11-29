@@ -7,8 +7,28 @@ build-debug:
 
 
 
+build-release:
+	mkdir -p target
+	rustc \
+		-O \
+		-C opt-level=s \
+		-C strip=none \
+		-C panic=abort \
+		-C linker-plugin-lto \
+		-C target-cpu=native \
+		-C lto \
+		-o target/1brc \
+		1brc.rs
+
+
+
 run-debug: build-debug
-	target/1brc-debug
+	time target/1brc-debug
+
+
+
+run: build-release
+	time target/1brc
 
 
 

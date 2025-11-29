@@ -1,3 +1,4 @@
 target/
 original_challenge_repo/
 data/
+perf.data*
