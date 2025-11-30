@@ -2,6 +2,9 @@
 
 
 extern crate libc;
+use libc::c_int;
+use libc::c_void;
+use libc::size_t;
 
 use std::fs::File;
 use std::os::fd::AsRawFd;
@@ -19,8 +22,25 @@ fn main() {
 	let file = File::open("data/big_measurements.txt").unwrap();
 	let file_map = unsafe { mmap(&file) };
 
-	for line in file_map.split(|c| *c == b'\n') {
+	let mut at = 0;
+	loop {
+		let rest = &file_map[at..];
+		let next_newline = unsafe { libc::memchr(
+			rest.as_ptr() as *const c_void,
+			b'\n' as c_int,
+			rest.len()
+		)};
+		let line = if next_newline.is_null() {
+			rest
+		} else {
+			let len = unsafe { (next_newline as *const u8).offset_from(rest.as_ptr()) } as usize;
+			&rest[..len]
+		};
+		at += line.len() + 1;
 		if line.is_empty() { break; }
+
+		// TODO: simd
+
 		let mut fields = line.rsplitn(2, |c| *c == b';');
 		let temperature = parse_temperature(fields.next().unwrap());
 		let station = fields.next().unwrap();
@@ -77,7 +97,7 @@ unsafe fn mmap(file: &File) -> &[u8] {
 	let len = file.metadata().unwrap().len();
 	let ptr = libc::mmap(
 		std::ptr::null_mut(),
-		len as libc::size_t,
+		len as size_t,
 		libc::PROT_READ,
 		libc::MAP_SHARED,
 		file.as_raw_fd(),
@@ -88,7 +108,7 @@ unsafe fn mmap(file: &File) -> &[u8] {
 		panic!("{:?}", std::io::Error::last_os_error());
 	}
 
-	if libc::madvise(ptr, len as libc::size_t, libc::MADV_SEQUENTIAL) != 0 {
+	if libc::madvise(ptr, len as size_t, libc::MADV_SEQUENTIAL) != 0 {
 		panic!("{:?}", std::io::Error::last_os_error());
 	}
 
