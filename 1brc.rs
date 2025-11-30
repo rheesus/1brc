@@ -12,7 +12,9 @@ use std::iter::FromIterator;
 
 
 fn main() {
-	let mut stats: HashMap<&[u8], (f64, f64, usize, f64)> = HashMap::new();
+	// making keys as &[u8] may break MADV_SEQUENTIAL
+	// TODO: measure
+	let mut stats: HashMap<&[u8], (i16, i64, usize, i16)> = HashMap::new();
 
 	let file = File::open("data/big_measurements.txt").unwrap();
 	let file_map = unsafe { mmap(&file) };
@@ -20,12 +22,11 @@ fn main() {
 	for line in file_map.split(|c| *c == b'\n') {
 		if line.is_empty() { break; }
 		let mut fields = line.rsplitn(2, |c| *c == b';');
-		let temperature = fields.next().unwrap();
-		let temperature: f64 = unsafe { str::from_utf8_unchecked(temperature) }.parse().unwrap();
+		let temperature = parse_temperature(fields.next().unwrap());
 		let station = fields.next().unwrap();
-		let stats = stats.entry(station).or_insert((f64::MAX, 0., 0, f64::MIN));
+		let stats = stats.entry(station).or_insert((i16::MAX, 0, 0, i16::MIN));
 		stats.0 = stats.0.min(temperature);
-		stats.1 += temperature;
+		stats.1 += i64::from(temperature);
 		stats.2 += 1;
 		stats.3 = stats.3.max(temperature);
 	}
@@ -37,12 +38,37 @@ fn main() {
 	);
 	let mut stats = stats.into_iter().peekable();
 	while let Some((station, (min, sum, count, max))) = stats.next() {
-		print!("{station}={min:.1}/{:.1}/{max:.1}", sum/(count as f64));
+		print!("{station}={:.1}/{:.1}/{:.1}",
+			(f32::from(min) / 10.),
+			(sum as f64) / (10. * count as f64),
+			(f32::from(max) / 10.)
+		);
 		if stats.peek().is_some() {
 			print!(", ");
 		}
 	}
 	print!("}}");
+}
+
+
+
+fn parse_temperature(bytes: &[u8]) -> i16 {
+	let mut temperature: i16 = 0;
+	let mut mul = 1;
+	for &d in bytes.iter().rev() {
+		match d {
+			b'.' => continue,
+			b'-' => {
+				temperature = -temperature;
+				break;
+			},
+			_ => {
+				temperature += i16::from(d - b'0') * mul;
+				mul *= 10;
+			}
+		}
+	}
+	temperature
 }
 
 
