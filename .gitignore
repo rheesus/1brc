@@ -1,4 +1,5 @@
 target/
 original_challenge_repo/
+libc_repo/
 data/
 perf.data*
