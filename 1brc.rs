@@ -1,6 +1,11 @@
 
 
 
+#![feature(portable_simd)]
+#![feature(slice_split_once)]
+
+
+
 extern crate libc;
 use libc::c_int;
 use libc::c_void;
@@ -11,6 +16,8 @@ use std::os::fd::AsRawFd;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::iter::FromIterator;
+use std::simd::u8x64;
+use std::simd::cmp::SimdPartialEq;
 
 
 
@@ -39,12 +46,19 @@ fn main() {
 		at += line.len() + 1;
 		if line.is_empty() { break; }
 
-		// TODO: simd
-
-		let mut fields = line.rsplitn(2, |c| *c == b';');
-		let temperature = parse_temperature(fields.next().unwrap());
-		let station = fields.next().unwrap();
+		let (station, temperature) = if line.len() > 64 {
+			line.rsplit_once(|c| *c == b';').unwrap()
+		} else {
+			let index_of_delimiter = {
+				let delimiter = u8x64::splat(b';');
+				let line = u8x64::load_or_default(line);
+				let delim_eq = delimiter.simd_eq(line);
+				unsafe { delim_eq.first_set().unwrap_unchecked() }
+			};
+			(&line[..index_of_delimiter], &line[index_of_delimiter + 1..])
+		};
 		let stats = stats.entry(station).or_insert((i16::MAX, 0, 0, i16::MIN));
+		let temperature = parse_temperature(temperature);
 		stats.0 = stats.0.min(temperature);
 		stats.1 += i64::from(temperature);
 		stats.2 += 1;

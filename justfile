@@ -8,7 +8,7 @@ prepare-libc:
 			git clone --depth 1 https://github.com/rust-lang/libc.git libc_repo
 		fi
 		mkdir -p target
-		rustc \
+		rustc +nightly \
 			-O \
 			-C opt-level=s \
 			-C strip=none \
@@ -27,7 +27,7 @@ prepare-libc:
 
 build-debug: prepare-libc
 	rustc -o target/libc-debug.rlib lib_repo/src/lib.rs
-	rustc \
+	rustc +nightly \
 		--extern libc=target/libc.rlib \
 		-o target/1brc-debug \
 		1brc.rs
@@ -35,13 +35,14 @@ build-debug: prepare-libc
 
 
 build-release: prepare-libc
-	rustc \
+	rustc +nightly \
 		-O \
 		-C opt-level=s \
 		-C strip=none \
 		-C panic=abort \
 		-C linker-plugin-lto \
 		-C target-cpu=native \
+		-C target-feature=+avx \
 		-C force-frame-pointers=yes \
 		-C lto \
 		--extern libc=target/libc.rlib \
